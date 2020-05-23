@@ -2,6 +2,7 @@
 # 2020 @ Paulus Gandung Prakosa <gandung@ppp.cylab.cmu.edu>
 
 import gdb
+import re
 
 def arg_to_num(arg):
 	if arg.startswith('0x'):
@@ -458,9 +459,56 @@ class PHPString(gdb.Command):
 
 		return refcount.split(' = ')[1].rstrip("\n")
 
+	def get_gc_u_type_info(self, addr):
+		type_info = gdb.execute(
+			"p/u (*(zend_string *)({})).gc.u.type_info".format(hex(addr)),
+			to_string=True
+		)
+
+		return type_info.split(' = ')[1].rstrip("\n")
+
+	def get_h(self, addr):
+		h = gdb.execute(
+			"p/lu (*(zend_string *)({})).h".format(hex(addr)),
+			to_string=True
+		)
+
+		return h.split(' = ')[1].rstrip("\n")
+
+	def get_len(self, addr):
+		tlen = gdb.execute(
+			"p/lu (*(zend_string *)({})).len".format(hex(addr)),
+			to_string=True
+		)
+
+		return tlen.split(' = ')[1].rstrip("\n")
+
+	def get_strval(self, addr):
+		tbuf = gdb.execute(
+			"x/s (*(zend_string *)({})).val".format(hex(addr)),
+			to_string=True
+		)
+
+		res = re.findall(r'(.*)(?:\:\s+)(.*)', tbuf)
+
+		return res[0][1].lstrip('"').rstrip('"').rstrip("\n")
+
 	def invoke(self, arg, from_tty):
 		print("- gc (zend_refcounted_h)")
 		print("  - refcount: {}".format(self.get_gc_refcount(arg_to_num(arg))))
+		print("  - u (union)")
+		print("    - type_info (uint32_t): {}".format(self.get_gc_u_type_info(arg_to_num(arg))))
+		print("- h (zend_ulong): {}".format(self.get_h(arg_to_num(arg))))
+		print("- len (size_t): {}".format(self.get_len(arg_to_num(arg))))
+
+		rbuf = self.get_strval(arg_to_num(arg))
+		rlen = self.get_len(arg_to_num(arg))
+		msg = ""
+
+		if len(rbuf) != int(rlen):
+			msg += " (corrupted: input string length are not equals to input string length in memory)."
+
+		print("- val (char *): {}{}".format(rbuf, msg))
 
 # run all registered commands.
 PHPArray()
