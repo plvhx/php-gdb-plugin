@@ -1,5 +1,5 @@
 # GDB plugin for debugging PHP engine
-# 2020 @ Paulus Gandung Prakosa <gandung@ppp.cylab.cmu.edu>
+# 2020 @ Paulus Gandung Prakosa <rvn.plvhx@gmail.com>
 
 import gdb
 import re
@@ -10,6 +10,9 @@ def arg_to_num(arg):
 	else:
 		v = int(arg, 0x0a)
 	return v
+
+class PHPZval(gdb.Command):
+	pass
 
 class PHPArray(gdb.Command):
 	def __init__(self):
@@ -510,7 +513,352 @@ class PHPString(gdb.Command):
 
 		print("- val (char *): {}{}".format(rbuf, msg))
 
-# run all registered commands.
-PHPArray()
-PHPHashTableBucket()
-PHPString()
+class PHPObject(gdb.Command):
+	def __init__(self):
+		super(PHPObject, self).__init__("php-object", gdb.COMMAND_USER)
+
+	def get_gc_refcount(self, addr):
+		refcount = gdb.execute(
+			"p/u (*(zend_object *)({})).gc.refcount".format(hex(addr)),
+			to_string=True
+		)
+
+		return refcount.split(' = ')[1].rstrip("\n")
+
+	def get_gc_u_type_info(self, addr):
+		type_info = gdb.execute(
+			"p/u (*(zend_object *)({})).gc.u.type_info".format(hex(addr)),
+			to_string=True
+		)
+
+		return type_info.split(' = ')[1].rstrip("\n")
+
+	def get_handle(self, addr):
+		handle = gdb.execute(
+			"p/u (*(zend_object *)({})).handle".format(hex(addr)),
+			to_string=True
+		)
+
+		return handle.split(' = ')[1].rstrip("\n")
+
+	def get_class_entry(self, addr):
+		ce = gdb.execute(
+			"p/x (*(zend_object *)({})).ce".format(hex(addr)),
+			to_string=True
+		)
+
+		return ce.split(' = ')[1].rstrip("\n")
+
+	def get_handlers(self, addr):
+		handlers = gdb.execute(
+			"p/x (*(zend_object *)({})).handlers".format(hex(addr)),
+			to_string=True
+		)
+
+		return handlers.split(' = ')[1].rstrip("\n")
+
+	def get_properties(self, addr):
+		prop = gdb.execute(
+			"p/x (*(zend_object *)({})).properties".format(hex(addr)),
+			to_string=True
+		)
+
+		return prop.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_lval(self, addr):
+		lval = gdb.execute(
+			"p/d (*(zend_object *)({})).properties_table.value.lval".format(hex(addr)),
+			to_string=True
+		)
+
+		return lval.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_dval(self, addr):
+		dval = gdb.execute(
+			"p/f (*(zend_object *)({})).properties_table.value.dval".format(hex(addr)),
+			to_string=True
+		)
+
+		return dval.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_counted(self, addr):
+		counted = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.counted".format(hex(addr)),
+			to_string=True
+		)
+
+		return counted.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_str(self, addr):
+		tstr = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.str".format(hex(addr)),
+			to_string=True
+		)
+
+		return tstr.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_arr(self, addr):
+		tarr = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.arr".format(hex(addr)),
+			to_string=True
+		)
+
+		return tarr.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_obj(self, addr):
+		tobj = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.obj".format(hex(addr)),
+			to_string=True
+		)
+
+		return tobj.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_res(self, addr):
+		tres = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.res".format(hex(addr)),
+			to_string=True
+		)
+
+		return tres.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_ref(self, addr):
+		tref = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.ref".format(hex(addr)),
+			to_string=True
+		)
+
+		return tref.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_ast(self, addr):
+		ast = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.ast".format(hex(addr)),
+			to_string=True
+		)
+
+		return ast.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_zval(self, addr):
+		zv = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.zv".format(hex(addr)),
+			to_string=True
+		)
+
+		return zv.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_ptr(self, addr):
+		ptr = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.ptr".format(hex(addr)),
+			to_string=True
+		)
+
+		return ptr.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_ce(self, addr):
+		ce = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.ce".format(hex(addr)),
+			to_string=True
+		)
+
+		return ce.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_func(self, addr):
+		tfunc = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.func".format(hex(addr)),
+			to_string=True
+		)
+
+		return tfunc.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_ww_w1(self, addr):
+		w1 = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.ww.w1".format(hex(addr)),
+			to_string=True
+		)
+
+		return w1.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_value_ww_w2(self, addr):
+		w2 = gdb.execute(
+			"p/x (*(zend_object *)({})).properties_table.value.ww.w2".format(hex(addr)),
+			to_string=True
+		)
+
+		return w2.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u1_v_type(self, addr):
+		vtype = gdb.execute(
+			"p/d (*(zend_object *)({})).properties_table.u1.v.type".format(hex(addr)),
+			to_string=True
+		)
+
+		return vtype.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u1_v_type_flags(self, addr):
+		vflags = gdb.execute(
+			"p/d (*(zend_object *)({})).properties_table.u1.v.type_flags".format(hex(addr)),
+			to_string=True
+		)
+
+		return vflags.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u1_v_u_extra(self, addr):
+		extra = gdb.execute(
+			"p/d (*(zend_object *)({})).properties_table.u1.v.u.extra".format(hex(addr)),
+			to_string=True
+		)
+
+		return extra.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u1_type_info(self, addr):
+		type_info = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u1.type_info".format(hex(addr)),
+			to_string=True
+		)
+
+		return type_info.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_next(self, addr):
+		tnext = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.next".format(hex(addr)),
+			to_string=True
+		)
+
+		return tnext.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_cache_slot(self, addr):
+		cache_slot = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.cache_slot".format(hex(addr)),
+			to_string=True
+		)
+
+		return cache_slot.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_opline_num(self, addr):
+		opline_num = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.opline_num".format(hex(addr)),
+			to_string=True
+		)
+
+		return opline_num.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_lineno(self, addr):
+		lineno = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.lineno".format(hex(addr)),
+			to_string=True
+		)
+
+		return lineno.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_num_args(self, addr):
+		num_args = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.num_args".format(hex(addr)),
+			to_string=True
+		)
+
+		return num_args.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_fe_pos(self, addr):
+		fe_pos = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.fe_pos".format(hex(addr)),
+			to_string=True
+		)
+
+		return fe_pos.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_fe_iter_idx(self, addr):
+		fe_iter_idx = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.fe_iter_idx".format(hex(addr)),
+			to_string=True
+		)
+
+		return fe_iter_idx.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_access_flags(self, addr):
+		acc_flags = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.access_flags".format(hex(addr)),
+			to_string=True
+		)
+
+		return acc_flags.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_property_guard(self, addr):
+		prop_guard = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.property_guard".format(hex(addr)),
+			to_string=True
+		)
+
+		return prop_guard.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_constant_flags(self, addr):
+		constant_flags = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.property_guard".format(hex(addr)),
+			to_string=True
+		)
+
+		return constant_flags.split(' = ')[1].rstrip("\n")
+
+	def get_proptbl_u2_extra(self, addr):
+		extra = gdb.execute(
+			"p/u (*(zend_object *)({})).properties_table.u2.extra".format(hex(addr)),
+			to_string=True
+		)
+
+		return extra.split(' = ')[1].rstrip("\n")
+
+	def invoke(self, arg, from_tty):
+		print("- gc (zend_refcounted_h)")
+		print("  - refcount (uint32_t): {}".format(self.get_gc_refcount(arg_to_num(arg))))
+		print("  - u (union)")
+		print("    - type_info (uint32_t): {}".format(self.get_gc_u_type_info(arg_to_num(arg))))
+		print("- handle (uint32_t): {}".format(self.get_handle(arg_to_num(arg))))
+		print("- ce (zend_class_entry *): {}".format(self.get_class_entry(arg_to_num(arg))))
+		print("- handlers (const zend_object_handlers *): {}".format(self.get_handlers(arg_to_num(arg))))
+		print("- properties (HashTable *): {}".format(self.get_properties(arg_to_num(arg))))
+		print("- properties_table (zval[1])")
+		print("  - value (zend_value)")
+		print("    - lval (zend_long): {}".format(self.get_proptbl_value_lval(arg_to_num(arg))))
+		print("    - dval (double): {}".format(self.get_proptbl_value_dval(arg_to_num(arg))))
+		print("    - counted (zend_refcounted *): {}".format(self.get_proptbl_value_counted(arg_to_num(arg))))
+		print("    - str (zend_string *): {}".format(self.get_proptbl_value_str(arg_to_num(arg))))
+		print("    - arr (zend_array *): {}".format(self.get_proptbl_value_arr(arg_to_num(arg))))
+		print("    - obj (zend_object *): {}".format(self.get_proptbl_value_obj(arg_to_num(arg))))
+		print("    - res (zend_resource *): {}".format(self.get_proptbl_value_res(arg_to_num(arg))))
+		print("    - ref (zend_reference *): {}".format(self.get_proptbl_value_ref(arg_to_num(arg))))
+		print("    - ast (zend_ast_ref *): {}".format(self.get_proptbl_value_ast(arg_to_num(arg))))
+		print("    - zv (zval *): {}".format(self.get_proptbl_value_zval(arg_to_num(arg))))
+		print("    - ptr (void *): {}".format(self.get_proptbl_value_ptr(arg_to_num(arg))))
+		print("    - ce (zend_class_entry *): {}".format(self.get_proptbl_value_ce(arg_to_num(arg))))
+		print("    - func (zend_function *): {}".format(self.get_proptbl_value_func(arg_to_num(arg))))
+		print("    - ww (struct)")
+		print("      - w1 (uint32_t): {}".format(self.get_proptbl_value_ww_w1(arg_to_num(arg))))
+		print("      - w2 (uint32_t): {}".format(self.get_proptbl_value_ww_w2(arg_to_num(arg))))
+		print("  - u1 (union)")
+		print("    - v (struct)")
+		print("      - type (zend_uchar): {}".format(self.get_proptbl_u1_v_type(arg_to_num(arg))))
+		print("      - type_flags (zend_uchar): {}".format(self.get_proptbl_u1_v_type_flags(arg_to_num(arg))))
+		print("      - u (union)")
+		print("        - extra (uint16_t): {}".format(self.get_proptbl_u1_v_u_extra(arg_to_num(arg))))
+		print("    - type_info (uint32_t): {}".format(self.get_proptbl_u1_type_info(arg_to_num(arg))))
+		print("  - u2 (union)")
+		print("    - next (uint32_t): {}".format(self.get_proptbl_u2_next(arg_to_num(arg))))
+		print("    - cache_slot (uint32_t): {}".format(self.get_proptbl_u2_cache_slot(arg_to_num(arg))))
+		print("    - opline_num (uint32_t): {}".format(self.get_proptbl_u2_opline_num(arg_to_num(arg))))
+		print("    - lineno (uint32_t): {}".format(self.get_proptbl_u2_lineno(arg_to_num(arg))))
+		print("    - num_args (uint32_t): {}".format(self.get_proptbl_u2_num_args(arg_to_num(arg))))
+		print("    - fe_pos (uint32_t): {}".format(self.get_proptbl_u2_fe_pos(arg_to_num(arg))))
+		print("    - fe_iter_idx (uint32_t): {}".format(self.get_proptbl_u2_fe_iter_idx(arg_to_num(arg))))
+		print("    - access_flags (uint32_t): {}".format(self.get_proptbl_u2_access_flags(arg_to_num(arg))))
+		print("    - property_guard (uint32_t): {}".format(self.get_proptbl_u2_property_guard(arg_to_num(arg))))
+		print("    - constant_flags (uint32_t): {}".format(self.get_proptbl_u2_constant_flags(arg_to_num(arg))))
+		print("    - extra (uint32_t): {}".format(self.get_proptbl_u2_extra(arg_to_num(arg))))
+
+def bootstrap_command(class_lists):
+	for i in range(len(class_lists)):
+		class_lists[i]()
+
+	return True
+
+if __name__ == '__main__':
+	bootstrap_command([
+		PHPArray, PHPHashTableBucket, PHPString, PHPObject
+	])
