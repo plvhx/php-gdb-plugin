@@ -4,6 +4,20 @@
 import gdb
 import re
 
+val_type = {
+	'undef': 0,
+	'null' : 1,
+	'false': 2,
+	'true' : 3,
+	'long' : 4,
+	'double': 5,
+	'string': 6,
+	'array': 7,
+	'object': 8,
+	'resource': 9,
+	'reference': 10
+}
+
 def arg_to_num(arg):
 	if arg.startswith('0x'):
 		v = int(arg, 0x10)
@@ -11,12 +25,17 @@ def arg_to_num(arg):
 		v = int(arg, 0x0a)
 	return v
 
-class PHPZval(gdb.Command):
-	pass
-
 class PHPArray(gdb.Command):
 	def __init__(self):
-		super(PHPArray, self).__init__("php-array", gdb.COMMAND_USER)
+		super(PHPArray, self).__init__("php-zval-array", gdb.COMMAND_USER)
+
+	def get_zval_type(self, addr):
+		rtype = gdb.execute(
+			"p/u (*(zval *)({})).u1.v.type".format(hex(addr)),
+			to_string=True
+		)
+
+		return int(rtype.split(' = ')[1].rstrip("\n"))
 
 	def get_gc_refcount(self, addr):
 		refcount = gdb.execute(
@@ -131,6 +150,10 @@ class PHPArray(gdb.Command):
 		return p_destructor.split(' = ')[1].rstrip("\n")
 
 	def invoke(self, arg, from_tty):
+		if self.get_zval_type(arg_to_num(arg)) != val_type['array']:
+			print("zval type must be an array.")
+			return
+
 		print("- gc (zend_refcounted_h)")
 		print("  - refcount (uint32_t): {}".format(self.get_gc_refcount(arg_to_num(arg))))
 		print("  - u (union)")
@@ -452,11 +475,19 @@ class PHPHashTableBucket(gdb.Command):
 
 class PHPString(gdb.Command):
 	def __init__(self):
-		super(PHPString, self).__init__("php-string", gdb.COMMAND_USER)
+		super(PHPString, self).__init__("php-zval-string", gdb.COMMAND_USER)
+
+	def get_zval_type(self, addr):
+		rtype = gdb.execute(
+			"p/u (*(zval *)({})).u1.v.type".format(hex(addr)),
+			to_string=True
+		)
+
+		return int(rtype.split(' = ')[1].rstrip("\n"))
 
 	def get_gc_refcount(self, addr):
 		refcount = gdb.execute(
-			"p/u (*(zend_string *)({})).gc.refcount".format(hex(addr)),
+			"p/u (*(zend_string *)((*(zval *)({})).value.str)).gc.refcount".format(hex(addr)),
 			to_string=True
 		)
 
@@ -464,7 +495,7 @@ class PHPString(gdb.Command):
 
 	def get_gc_u_type_info(self, addr):
 		type_info = gdb.execute(
-			"p/u (*(zend_string *)({})).gc.u.type_info".format(hex(addr)),
+			"p/u (*(zend_string *)((*(zval *)({})).value.str)).gc.u.type_info".format(hex(addr)),
 			to_string=True
 		)
 
@@ -472,7 +503,7 @@ class PHPString(gdb.Command):
 
 	def get_h(self, addr):
 		h = gdb.execute(
-			"p/lu (*(zend_string *)({})).h".format(hex(addr)),
+			"p/lu (*(zend_string *)((*(zval *)({})).value.str)).h".format(hex(addr)),
 			to_string=True
 		)
 
@@ -480,7 +511,7 @@ class PHPString(gdb.Command):
 
 	def get_len(self, addr):
 		tlen = gdb.execute(
-			"p/lu (*(zend_string *)({})).len".format(hex(addr)),
+			"p/lu (*(zend_string *)((*(zval *)({})).value.str)).len".format(hex(addr)),
 			to_string=True
 		)
 
@@ -488,7 +519,7 @@ class PHPString(gdb.Command):
 
 	def get_strval(self, addr):
 		tbuf = gdb.execute(
-			"x/s (*(zend_string *)({})).val".format(hex(addr)),
+			"x/s (*(zend_string *)((*(zval *)({})).value.str)).val".format(hex(addr)),
 			to_string=True
 		)
 
@@ -497,6 +528,10 @@ class PHPString(gdb.Command):
 		return res[0][1].lstrip('"').rstrip('"').rstrip("\n")
 
 	def invoke(self, arg, from_tty):
+		if self.get_zval_type(arg_to_num(arg)) != val_type['string']:
+			print("zval type must be a string.")
+			return
+
 		print("- gc (zend_refcounted_h)")
 		print("  - refcount: {}".format(self.get_gc_refcount(arg_to_num(arg))))
 		print("  - u (union)")
@@ -515,11 +550,19 @@ class PHPString(gdb.Command):
 
 class PHPObject(gdb.Command):
 	def __init__(self):
-		super(PHPObject, self).__init__("php-object", gdb.COMMAND_USER)
+		super(PHPObject, self).__init__("php-zval-object", gdb.COMMAND_USER)
+
+	def get_zval_type(self, addr):
+		rtype = gdb.execute(
+			"p/u (*(zval *)({})).u1.v.type".format(hex(addr)),
+			to_string=True
+		)
+
+		return int(rtype.split(' = ')[1].rstrip("\n"))
 
 	def get_gc_refcount(self, addr):
 		refcount = gdb.execute(
-			"p/u (*(zend_object *)({})).gc.refcount".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).gc.refcount".format(hex(addr)),
 			to_string=True
 		)
 
@@ -527,7 +570,7 @@ class PHPObject(gdb.Command):
 
 	def get_gc_u_type_info(self, addr):
 		type_info = gdb.execute(
-			"p/u (*(zend_object *)({})).gc.u.type_info".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).gc.u.type_info".format(hex(addr)),
 			to_string=True
 		)
 
@@ -535,7 +578,7 @@ class PHPObject(gdb.Command):
 
 	def get_handle(self, addr):
 		handle = gdb.execute(
-			"p/u (*(zend_object *)({})).handle".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).handle".format(hex(addr)),
 			to_string=True
 		)
 
@@ -543,7 +586,7 @@ class PHPObject(gdb.Command):
 
 	def get_class_entry(self, addr):
 		ce = gdb.execute(
-			"p/x (*(zend_object *)({})).ce".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).ce".format(hex(addr)),
 			to_string=True
 		)
 
@@ -551,7 +594,7 @@ class PHPObject(gdb.Command):
 
 	def get_handlers(self, addr):
 		handlers = gdb.execute(
-			"p/x (*(zend_object *)({})).handlers".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).handlers".format(hex(addr)),
 			to_string=True
 		)
 
@@ -559,7 +602,7 @@ class PHPObject(gdb.Command):
 
 	def get_properties(self, addr):
 		prop = gdb.execute(
-			"p/x (*(zend_object *)({})).properties".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties".format(hex(addr)),
 			to_string=True
 		)
 
@@ -567,7 +610,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_lval(self, addr):
 		lval = gdb.execute(
-			"p/d (*(zend_object *)({})).properties_table.value.lval".format(hex(addr)),
+			"p/d (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.lval".format(hex(addr)),
 			to_string=True
 		)
 
@@ -575,7 +618,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_dval(self, addr):
 		dval = gdb.execute(
-			"p/f (*(zend_object *)({})).properties_table.value.dval".format(hex(addr)),
+			"p/f (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.dval".format(hex(addr)),
 			to_string=True
 		)
 
@@ -583,7 +626,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_counted(self, addr):
 		counted = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.counted".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.counted".format(hex(addr)),
 			to_string=True
 		)
 
@@ -591,7 +634,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_str(self, addr):
 		tstr = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.str".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.str".format(hex(addr)),
 			to_string=True
 		)
 
@@ -599,7 +642,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_arr(self, addr):
 		tarr = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.arr".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.arr".format(hex(addr)),
 			to_string=True
 		)
 
@@ -607,7 +650,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_obj(self, addr):
 		tobj = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.obj".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.obj".format(hex(addr)),
 			to_string=True
 		)
 
@@ -615,7 +658,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_res(self, addr):
 		tres = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.res".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.res".format(hex(addr)),
 			to_string=True
 		)
 
@@ -623,7 +666,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_ref(self, addr):
 		tref = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.ref".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.ref".format(hex(addr)),
 			to_string=True
 		)
 
@@ -631,7 +674,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_ast(self, addr):
 		ast = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.ast".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.ast".format(hex(addr)),
 			to_string=True
 		)
 
@@ -639,7 +682,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_zval(self, addr):
 		zv = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.zv".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.zv".format(hex(addr)),
 			to_string=True
 		)
 
@@ -647,7 +690,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_ptr(self, addr):
 		ptr = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.ptr".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.ptr".format(hex(addr)),
 			to_string=True
 		)
 
@@ -655,7 +698,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_ce(self, addr):
 		ce = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.ce".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.ce".format(hex(addr)),
 			to_string=True
 		)
 
@@ -663,7 +706,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_func(self, addr):
 		tfunc = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.func".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.func".format(hex(addr)),
 			to_string=True
 		)
 
@@ -671,7 +714,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_ww_w1(self, addr):
 		w1 = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.ww.w1".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.ww.w1".format(hex(addr)),
 			to_string=True
 		)
 
@@ -679,7 +722,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_value_ww_w2(self, addr):
 		w2 = gdb.execute(
-			"p/x (*(zend_object *)({})).properties_table.value.ww.w2".format(hex(addr)),
+			"p/x (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.value.ww.w2".format(hex(addr)),
 			to_string=True
 		)
 
@@ -687,7 +730,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u1_v_type(self, addr):
 		vtype = gdb.execute(
-			"p/d (*(zend_object *)({})).properties_table.u1.v.type".format(hex(addr)),
+			"p/d (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u1.v.type".format(hex(addr)),
 			to_string=True
 		)
 
@@ -695,7 +738,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u1_v_type_flags(self, addr):
 		vflags = gdb.execute(
-			"p/d (*(zend_object *)({})).properties_table.u1.v.type_flags".format(hex(addr)),
+			"p/d (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u1.v.type_flags".format(hex(addr)),
 			to_string=True
 		)
 
@@ -703,7 +746,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u1_v_u_extra(self, addr):
 		extra = gdb.execute(
-			"p/d (*(zend_object *)({})).properties_table.u1.v.u.extra".format(hex(addr)),
+			"p/d (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u1.v.u.extra".format(hex(addr)),
 			to_string=True
 		)
 
@@ -711,7 +754,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u1_type_info(self, addr):
 		type_info = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u1.type_info".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u1.type_info".format(hex(addr)),
 			to_string=True
 		)
 
@@ -719,7 +762,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_next(self, addr):
 		tnext = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.next".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.next".format(hex(addr)),
 			to_string=True
 		)
 
@@ -727,7 +770,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_cache_slot(self, addr):
 		cache_slot = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.cache_slot".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.cache_slot".format(hex(addr)),
 			to_string=True
 		)
 
@@ -735,7 +778,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_opline_num(self, addr):
 		opline_num = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.opline_num".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.opline_num".format(hex(addr)),
 			to_string=True
 		)
 
@@ -743,7 +786,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_lineno(self, addr):
 		lineno = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.lineno".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.lineno".format(hex(addr)),
 			to_string=True
 		)
 
@@ -751,7 +794,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_num_args(self, addr):
 		num_args = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.num_args".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.num_args".format(hex(addr)),
 			to_string=True
 		)
 
@@ -759,7 +802,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_fe_pos(self, addr):
 		fe_pos = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.fe_pos".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.fe_pos".format(hex(addr)),
 			to_string=True
 		)
 
@@ -767,7 +810,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_fe_iter_idx(self, addr):
 		fe_iter_idx = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.fe_iter_idx".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.fe_iter_idx".format(hex(addr)),
 			to_string=True
 		)
 
@@ -775,7 +818,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_access_flags(self, addr):
 		acc_flags = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.access_flags".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.access_flags".format(hex(addr)),
 			to_string=True
 		)
 
@@ -783,7 +826,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_property_guard(self, addr):
 		prop_guard = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.property_guard".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.property_guard".format(hex(addr)),
 			to_string=True
 		)
 
@@ -791,7 +834,7 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_constant_flags(self, addr):
 		constant_flags = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.property_guard".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.property_guard".format(hex(addr)),
 			to_string=True
 		)
 
@@ -799,13 +842,17 @@ class PHPObject(gdb.Command):
 
 	def get_proptbl_u2_extra(self, addr):
 		extra = gdb.execute(
-			"p/u (*(zend_object *)({})).properties_table.u2.extra".format(hex(addr)),
+			"p/u (*(zend_object *)((*(zval *)({})).value.obj)).properties_table.u2.extra".format(hex(addr)),
 			to_string=True
 		)
 
 		return extra.split(' = ')[1].rstrip("\n")
 
 	def invoke(self, arg, from_tty):
+		if self.get_zval_type(arg_to_num(arg)) != val_type['object']:
+			print("zval type must be an object.")
+			return
+
 		print("- gc (zend_refcounted_h)")
 		print("  - refcount (uint32_t): {}".format(self.get_gc_refcount(arg_to_num(arg))))
 		print("  - u (union)")
