@@ -899,6 +899,71 @@ class PHPObject(gdb.Command):
 		print("    - constant_flags (uint32_t): {}".format(self.get_proptbl_u2_constant_flags(arg_to_num(arg))))
 		print("    - extra (uint32_t): {}".format(self.get_proptbl_u2_extra(arg_to_num(arg))))
 
+class PHPResource(gdb.Command):
+	def __init__(self):
+		super(PHPResource, self).__init__("php-zval-resource", gdb.COMMAND_USER)
+
+	def get_zval_type(self, addr):
+		rtype = gdb.execute(
+			"p/u (*(zval *)({})).u1.v.type".format(hex(addr)),
+			to_string=True
+		)
+
+		return int(rtype.split(' = ')[1].rstrip("\n"))
+
+	def get_gc_refcount(self, addr):
+		refcount = gdb.execute(
+			"p/u (*(zend_resource *)((*(zval *)({})).value.res)).gc.refcount".format(hex(addr)),
+			to_string=True
+		)
+
+		return refcount.split(' = ')[1].rstrip("\n")
+
+	def get_gc_u_type_info(self, addr):
+		type_info = gdb.execute(
+			"p/u (*(zend_resource *)((*(zval *)({})).value.res)).gc.u.type_info".format(hex(addr)),
+			to_string=True
+		)
+
+		return type_info.split(' = ')[1].rstrip("\n")
+
+	def get_handle(self, addr):
+		handle = gdb.execute(
+			"p/d (*(zend_resource *)((*(zval *)({})).value.res)).handle".format(hex(addr)),
+			to_string=True
+		)
+
+		return handle.split(' = ')[1].rstrip("\n")
+
+	def get_type(self, addr):
+		rtype = gdb.execute(
+			"p/d (*(zend_resource *)((*(zval *)({})).value.res)).type".format(hex(addr)),
+			to_string=True
+		)
+
+		return rtype.split(' = ')[1].rstrip("\n")
+
+	def get_ptr(self, addr):
+		ptr = gdb.execute(
+			"p/x (*(zend_resource *)((*(zval *)({})).value.res)).ptr".format(hex(addr)),
+			to_string=True
+		)
+
+		return ptr.split(' = ')[1].rstrip("\n")
+
+	def invoke(self, arg, from_tty):
+		if self.get_zval_type(arg_to_num(arg)) != val_type['resource']:
+			print("zval type must be a resource.")
+			return
+
+		print("- gc (zend_refcounted_h)")
+		print("  - refcount (uint32_t): {}".format(self.get_gc_refcount(arg_to_num(arg))))
+		print("  - u (union)")
+		print("    - type_info (uint32_t): {}".format(self.get_gc_u_type_info(arg_to_num(arg))))
+		print("- handle (int): {}".format(self.get_handle(arg_to_num(arg))))
+		print("- type (int): {}".format(self.get_type(arg_to_num(arg))))
+		print("= ptr (void *): {}".format(self.get_ptr(arg_to_num(arg))))
+
 def bootstrap_command(class_lists):
 	for i in range(len(class_lists)):
 		class_lists[i]()
@@ -907,5 +972,6 @@ def bootstrap_command(class_lists):
 
 if __name__ == '__main__':
 	bootstrap_command([
-		PHPArray, PHPHashTableBucket, PHPString, PHPObject
+		PHPString, PHPArray, PHPObject, PHPResource,
+		PHPHashTableBucket
 	])
